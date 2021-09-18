@@ -43,10 +43,18 @@ def find_pbp_id(sched_id):
     # Return the PBP game ID
     return pbp_id
 
-def pbp_scrape(game_id, event_list, game_no, filename1):
-    event_id = event_list[game_no]
-    # Pull the PBP game ID for the specified game
-    pbp_game_id = find_pbp_id(event_id)
+def pbp_scrape(game_id = None, event_list = None, game_no = None, filename1 = None):
+    #need to specify a game ID or event_list needs to be a list of the schedule IDs
+    #filename1 should be the desired name of the output file
+    if game_id is not None and event_list is None:
+        pbp_game_id = game_id
+        event_id = None
+    elif event_list is not None and game_id is None:
+        event_id = event_list[game_no]
+        # Pull the PBP game ID for the specified game
+        pbp_game_id = find_pbp_id(event_id)
+    else:
+        print("Please input a game ID or an event list of schedule IDs")
     # Specify the PBP page to extract, and pull its source code:
     url = "https://stats.ncaa.org/game/play_by_play/{}".format(pbp_game_id)
     response = requests.get(url, headers=headers)
@@ -67,26 +75,30 @@ def pbp_scrape(game_id, event_list, game_no, filename1):
     p1rows = period1.find_all('tr')
     p2rows = period2.find_all('tr')
     p3rows = period3.find_all('tr')
-
+    away_team = p1rows[0].select('tr > td')[1].get_text(strip=True)
+    home_team = p1rows[0].select('tr > td')[3].get_text(strip=True)
     # Initialize empty list:
     all_plays = []
 
     # Add each row to the master list:
     for i in range(1, len(p1rows)-1):
-        all_plays.append([str(event_id), pbp_game_id, 1, "[" + p1rows[i].select('tr > td')[0].get_text(strip=True) + "]", p1rows[i].select('tr > td')[1].get_text(strip=True), "[" + p1rows[i].select('tr > td')[2].get_text(strip=True) + "]", p1rows[i].select('tr > td')[3].get_text(strip=True)])
+        all_plays.append([str(event_id),pbp_game_id, home_team, away_team, 1, p1rows[i].select('tr > td')[2].get_text(strip=True)[0], p1rows[i].select('tr > td')[2].get_text(strip=True)[2], p1rows[i].select('tr > td')[0].get_text(strip=True), p1rows[i].select('tr > td')[1].get_text(strip=True), p1rows[i].select('tr > td')[3].get_text(strip=True)])
     for i in range(1, len(p2rows)-1):
-        all_plays.append([str(event_id), pbp_game_id, 2, "[" + p2rows[i].select('tr > td')[0].get_text(strip=True) + "]", p2rows[i].select('tr > td')[1].get_text(strip=True), "[" + p2rows[i].select('tr > td')[2].get_text(strip=True) + "]", p2rows[i].select('tr > td')[3].get_text(strip=True)])
+        all_plays.append([str(event_id),pbp_game_id, home_team, away_team, 2, p2rows[i].select('tr > td')[2].get_text(strip=True)[0], p2rows[i].select('tr > td')[2].get_text(strip=True)[2], p2rows[i].select('tr > td')[0].get_text(strip=True), p2rows[i].select('tr > td')[1].get_text(strip=True), p2rows[i].select('tr > td')[3].get_text(strip=True)])
     for i in range(1, len(p3rows)-1):
-        all_plays.append([str(event_id), pbp_game_id, 3, "[" + p3rows[i].select('tr > td')[0].get_text(strip=True) + "]", p3rows[i].select('tr > td')[1].get_text(strip=True), "[" + p3rows[i].select('tr > td')[2].get_text(strip=True) + "]", p3rows[i].select('tr > td')[3].get_text(strip=True)])
+        all_plays.append([str(event_id), pbp_game_id, home_team, away_team, 3, p3rows[i].select('tr > td')[2].get_text(strip=True)[0], p3rows[i].select('tr > td')[2].get_text(strip=True)[2], p3rows[i].select('tr > td')[0].get_text(strip=True) , p3rows[i].select('tr > td')[1].get_text(strip=True), p3rows[i].select('tr > td')[3].get_text(strip=True)])
     if len(soup.find_all("table", class_="mytable")) > 4:
         p4rows = period4.find_all('tr')
         for i in range(1, len(p4rows)-1):
-            all_plays.append([str(event_id), pbp_game_id, 4, "[" + p4rows[i].select('tr > td')[0].get_text(strip=True) + "]", p4rows[i].select('tr > td')[1].get_text(strip=True), "[" + p4rows[i].select('tr > td')[2].get_text(strip=True) + "]", p4rows[i].select('tr > td')[3].get_text(strip=True)])
+            all_plays.append([str(event_id),pbp_game_id, home_team, away_team, 4, p4rows[i].select('tr > td')[2].get_text(strip=True)[0], p4rows[i].select('tr > td')[2].get_text(strip=True)[2], p4rows[i].select('tr > td')[0].get_text(strip=True), p4rows[i].select('tr > td')[1].get_text(strip=True), p4rows[i].select('tr > td')[3].get_text(strip=True)])
 
-    # Write the row data to a CSV file:
-    with open(filename1, "a", encoding='utf-16') as f:
-        writer = csv.writer(f, delimiter="|")
-        writer.writerows(all_plays)
+    if filename1 is not None:
+        # Write the row data to a CSV file:
+        with open(filename1, "a", encoding='utf-16') as f:
+            writer = csv.writer(f, delimiter="|")
+            writer.writerows(all_plays)
+    else:
+        return all_plays
 
 def main():
 
