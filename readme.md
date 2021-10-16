@@ -50,9 +50,10 @@ The following documentation was modified from https://github.com/bigdatacup/Big-
 ### Event Types
 Shot
 - Player: Shooter
-- Player 2: if shot blocked, Blocker
+- Player 2: Blocker if shot blocked
 - Detail 1: Shot Type (Wide, Missed, Blocked)
 - Detail 2: One timer (true or false)
+- Goalie: Goalie who made the save
 
 Goal
 - Player: Shooter
