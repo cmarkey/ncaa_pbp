@@ -2,7 +2,9 @@
 from bs4 import BeautifulSoup
 import requests
 from datetime import timedelta, date, datetime
+from ncaa_pbp import ncaa_pbp_scrape as pbp_scraper
 import csv
+import pandas as pd
 
 # Assign headers to use with requests.get - this helps to avoid a permissions error
 headers = {
@@ -12,19 +14,17 @@ headers = {
 
 # Specify a start and end date, the season ID you're scraping, and the file name to write the data to
 start_date = date(2021, 9, 18)
-end_date = date(2021, 10, 14)
-season_id = 17800 # Grab this from the URL on the schedule page. Ex: https://stats.ncaa.org/season_divisions/17460/scoreboards?
-file_name = "NCAAW_game_urls_2021.csv"
-
+end_date = date(2021, 10, 15)
+season_id = 17800 # 2021-22 season id. Grab this from the URL on the schedule page. Ex: https://stats.ncaa.org/season_divisions/17460/scoreboards?
+file_name = str(start_date)+"_"+str(end_date)+"NCAAW_game_urls.csv"
 # Initialize the date variable to iterate through
 current_date = start_date
 
+# Initialize an empty list to store our data in
+game_data = []
+
 # Run through the code for all dates in the date range
 while current_date <= end_date:
-
-    # Initialize an empty list to store our data in
-    game_data = []
-
     # Specify the URL using the current date in our loop
     url = "https://stats.ncaa.org/season_divisions/" + str(season_id) + "/scoreboards?game_date="  + str(current_date.month) + "%2F"  + str(current_date.day) + "%2F" + str(current_date.year)
     print(url)
@@ -43,10 +43,8 @@ while current_date <= end_date:
             if len(game_rows[i]) != 4:
                 pass
             else:
-
                 # Add the current date you're scraping and the game ID to your list
                 game_data.append([str(current_date), game_rows[i].select('tr > td')[0].find('a').attrs['href'][10:].replace("/box_score", "")])
-
         # Write the current date's list to a CSV file
         with open(file_name, "a", encoding='utf-16',newline='') as f:
             writer = csv.writer(f, delimiter=",")
@@ -56,3 +54,5 @@ while current_date <= end_date:
 
     # Iterate to the next date
     current_date = current_date + timedelta(days=1)
+
+pbp_scraper.run_full_scrape(pd.DataFrame(game_data))
