@@ -109,6 +109,9 @@ def parse_pbp(raw_pbp):
     pbp_organized_df.loc[pbp_unorganized_df['Away Team Event'] == '', 'Team'] = pbp_organized_df['Home Team']
     pbp_organized_df.loc[pbp_unorganized_df['Home Team Event'] == '', 'Team'] = pbp_organized_df['Away Team']
     pbp_unorganized_df['Event'] = pbp_unorganized_df['Home Team Event']+pbp_unorganized_df['Away Team Event']
+    pbp_organized_df['Home Team Goals'] = pd.to_numeric(pbp_organized_df['Home Team Goals'])
+    pbp_organized_df['Away Team Goals'] = pd.to_numeric(pbp_organized_df['Away Team Goals'])
+
 
     #set even strength as default
     pbp_organized_df['Home Team Players'] = 5
@@ -132,7 +135,7 @@ def parse_pbp(raw_pbp):
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot') & (pbp_unorganized_df['Event'].str.contains(type, case=False)), 'Detail 1'] = type
     #format 1
     if ((pbp_organized_df['Event'] == 'Shot') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'].str.extract(r"Shot by (.*)\(\w+\)", flags=re.IGNORECASE)[0]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'].str.extract(r"Shot by (.*)\(.+\)", flags=re.IGNORECASE)[0]
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Goalie'] = pbp_unorganized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Event'].str.extract(r"save (.*)", flags=re.IGNORECASE)[0]
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player 2'] = pbp_unorganized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Event'].str.extract(r"BLOCKED by (.*)", flags=re.IGNORECASE)[0]
     #format 2
@@ -147,10 +150,10 @@ def parse_pbp(raw_pbp):
     #format 1
     if ((pbp_organized_df['Event'] == 'Faceoff Won') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
         #setting Player as winner of faceoff
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Faceoff Won'), 'Player'] = pbp_unorganized_df.loc[pbp_organized_df['Event']=='Faceoff Won', 'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(\w+\)", flags=re.IGNORECASE)[2]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Faceoff Won'), 'Player'] = pbp_unorganized_df.loc[pbp_organized_df['Event']=='Faceoff Won', 'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[2]
         #setting the losers as Player 2
-        away_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(\w+\)", flags=re.IGNORECASE)[0]
-        home_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(\w+\)", flags=re.IGNORECASE)[1]
+        away_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[0]
+        home_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[1]
         faceoff_home_loser = ((pbp_organized_df['Team'] == pbp_organized_df['Away Team']) & (pbp_organized_df['Event'] == 'Faceoff Won'))
         faceoff_away_loser = ((pbp_organized_df['Team'] == pbp_organized_df['Home Team']) & (pbp_organized_df['Event'] == 'Faceoff Won'))
         pbp_organized_df.loc[faceoff_home_loser, 'Player 2'] = home_faceoff_players
@@ -161,9 +164,9 @@ def parse_pbp(raw_pbp):
     pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'] = 'Goal'
     #format 1
     if ((pbp_organized_df['Event'] == 'Goal') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(\w+\)", flags=re.IGNORECASE)[0]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(.+\)", flags=re.IGNORECASE)[0]
         #1st assist
-        assists = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(\w+\),\s?Assist by (.*) On ice for \w+: On ice for \w+:", flags=re.IGNORECASE)[1]
+        assists = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(.+\),\s?Assist by (.*) On ice for \.+: On ice for \.+:", flags=re.IGNORECASE)[1]
         assists = assists[assists.notna()]
         #1st assist if it exists
         pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('and'), 'Detail 1'] = assists.str.extract(r"(.*) and (.*),", flags=re.IGNORECASE)[0]
@@ -171,6 +174,8 @@ def parse_pbp(raw_pbp):
             pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False)) & (~pbp_unorganized_df['Event'].str.contains('and')) & (assists.notna()), 'Detail 1'] = assists.str.extract(r"(.*)", flags=re.IGNORECASE)[0]
         #2nd assist if it exists
         pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('and'), 'Detail 2'] = assists.str.extract(r"(.*) and (.*),", flags=re.IGNORECASE)[1]
+    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Home Team']), 'Home Team Goals'] -= 1
+    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Away Team']), 'Away Team Goals'] -= 1
 
 
     #shootout parsing
@@ -193,9 +198,9 @@ def parse_pbp(raw_pbp):
     pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_in_phrases), case=False), 'Event'] = 'Goalie in net'
     pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_pull_phrases), case=False), 'Event'] = 'Goalie sub out'
     if ((pbp_organized_df['Event'] == 'Goalie in net') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goalie in net'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_in_phrases), case=False), 'Event'].str.extract(r"Goalie sub \w+ (.*)\s?\(\w+\)", flags=re.IGNORECASE)[0]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goalie in net'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_in_phrases), case=False), 'Event'].str.extract(r"Goalie sub \w+ (.*)\s?\(.+\)", flags=re.IGNORECASE)[0]
     if ((pbp_organized_df['Event'] == 'Goalie sub out') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goalie sub out'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_pull_phrases), case=False), 'Event'].str.extract(r"Goalie sub \w+ (.*)\s?\(\w+\)", flags=re.IGNORECASE)[0]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goalie sub out'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_pull_phrases), case=False), 'Event'].str.extract(r"Goalie sub \w+ (.*)\s?\(.+\)", flags=re.IGNORECASE)[0]
 
     #Penalties + empty net + strength calculations
     player_penalty_phrases = ['Minor penalty', 'Major Penalty', 'Penalty on']
@@ -205,12 +210,12 @@ def parse_pbp(raw_pbp):
     pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases))), 'Event'] = 'Player Penalty'
     if ((pbp_organized_df['Event'] == 'Player Penalty') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
         #first format is if penalized player is serving penalty, second format is if another player is serving the penalty
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[0].str.title()
-        pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
-        #print(pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title() +pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title())
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[1].str.title()
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[2]
-        pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[2]
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[0].str.title()
+        pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
+        #print(pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title() +pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title())
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[1].str.title()
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[2]
+        pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[2]
         #iterating through each team's penalties by period and calculating strength
         for team in ['Home Team', 'Away Team']:
             for period in [1,2,3,4]:
@@ -230,11 +235,11 @@ def parse_pbp(raw_pbp):
     #print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty')])
     if ((pbp_organized_df['Event'] == 'Team Penalty') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
         #setting player who served penalty + penalty + duration
-        first = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases)), 'Event'].str.extract(r"Penalty on Team\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title()
-        last = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases)), 'Event'].str.extract(r"Penalty on Team\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[2].str.title()
+        first = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases)), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title()
+        last = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases)), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[2].str.title()
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Player'] = first+" "+last
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 2'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(\w+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[1].str.title()
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
+        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 2'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[1].str.title()
     #    print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Player'])
         #iterating through each team's penalties by period and calculating strength
         for team in ['Home Team', 'Away Team']:
@@ -291,6 +296,3 @@ def run_full_scrape(games):
         # Print the event_id and game_no so we can keep track of progress while the code runs:
         print(event_id)
         print(game_no)
-
-if __name__ == '__main__':
-    main()
