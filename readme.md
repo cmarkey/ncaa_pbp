@@ -1,5 +1,5 @@
 ## About:
-This code is designed to pull WOMEN'S hockey pbp data from stats.ncaa.org, put it
+This code is designed to pull NCAA women'S hockey pbp data from stats.ncaa.org, put it
 in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
 "GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format.
 
