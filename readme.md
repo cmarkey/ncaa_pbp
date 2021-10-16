@@ -1,11 +1,11 @@
-To use this
+This code is designed to pull WOMEN'S hockey pbp data from stats.ncaa.org, put it
+in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
+"GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format.
+
+To use:
 • Run "full_scrape.py" with the start (start_date) and end dates (end_date) line you wish to scrape.
 • Use ncaa-schedule-finder.py to pull all the event IDs (unique schedule ID that appears in the middle
 of https://stats.ncaa.org/contests/2120211/box_score) for games played between specified dates
-
-This code is designed to pull WOMEN'S hockey pbp data from stats.ncaa.org, put it
-in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
-"GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format
 
 Currently unaccounted for cases:
 - games in which a game id has been generated but no data has been entered yet (usually occurs when trying to
