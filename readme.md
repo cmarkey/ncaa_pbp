@@ -1,13 +1,14 @@
+## About:
 This code is designed to pull WOMEN'S hockey pbp data from stats.ncaa.org, put it
 in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
 "GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format.
 
-To use:
-• Run "full_scrape.py" with the start (start_date) and end dates (end_date) line you wish to scrape.
-• Use ncaa-schedule-finder.py to pull all the event IDs (unique schedule ID that appears in the middle
+## To use:
+- Run "full_scrape.py" with the start (start_date) and end dates (end_date) line you wish to scrape.
+- Use ncaa-schedule-finder.py to pull all the event IDs (unique schedule ID that appears in the middle
 of https://stats.ncaa.org/contests/2120211/box_score) for games played between specified dates
 
-Currently unaccounted for cases:
+## Cases currently unaccounted for
 - games in which a game id has been generated but no data has been entered yet (usually occurs when trying to
 scrape a game that occurred on the same day of scraping)
 - occasional pbp data that is a different format than the main format
@@ -19,10 +20,10 @@ scrape a game that occurred on the same day of scraping)
 If you find an issue, please open an issue in the "Issues" tab. For any other questions or comments,
 please contact carleenmarkey@gmail.com
 
+## Data format
 The following documentation was modified from https://github.com/bigdatacup/Big-Data-Cup-2021/
 
-Data format:
-Date (e.g. ‘2020-12-23’. Format = ‘yyyy-mm-dd’)
+- Date (e.g. ‘2020-12-23’. Format = ‘yyyy-mm-dd’)
 Game ID (unique game ID that appears at the end of https://stats.ncaa.org/game/play_by_play/)
 Home Team (e.g. ‘Maine’)
 Away Team (e.g. ‘Long Island University’)
