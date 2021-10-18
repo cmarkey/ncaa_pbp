@@ -13,8 +13,8 @@ headers = {
 }
 
 # Specify a start and end date, the season ID you're scraping, and the file name to write the data to
-start_date = date(2021, 10, 9)
-end_date = date(2021, 10, 9)
+start_date = date(2021, 9, 24)
+end_date = date(2021, 10, 16)
 season_id = 17800 # 2021-22 season id. Grab this from the URL on the schedule page. Ex: https://stats.ncaa.org/season_divisions/17460/scoreboards?
 file_name = str(start_date)+"_"+str(end_date)+"NCAAW_game_urls.csv"
 # Initialize the date variable to iterate through

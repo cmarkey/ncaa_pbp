@@ -96,7 +96,7 @@ def parse_pbp(raw_pbp):
     #setting the list pbp as a dataframe
     pbp_unorganized_df = pd.DataFrame(raw_pbp, columns=['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock', 'Away Team Event', 'Home Team Event'])
 
-    #filtering out pbp lines that have no impact on play or the interpretation of other events
+    #filtering out pbp lines that have no impact on play, and no impact the interpretation of other events
     #this code chunk has to be here otherwise the rest of the code breaks
     unwanted_pbp = ['Timeout', 'Shootout', 'Start power play for']
     pbp_unorganized_df['Event'] = pbp_unorganized_df['Home Team Event']+pbp_unorganized_df['Away Team Event']
@@ -109,18 +109,20 @@ def parse_pbp(raw_pbp):
     pbp_organized_df.loc[pbp_unorganized_df['Away Team Event'] == '', 'Team'] = pbp_organized_df['Home Team']
     pbp_organized_df.loc[pbp_unorganized_df['Home Team Event'] == '', 'Team'] = pbp_organized_df['Away Team']
     pbp_unorganized_df['Event'] = pbp_unorganized_df['Home Team Event']+pbp_unorganized_df['Away Team Event']
-    pbp_organized_df['Home Team Goals'] = pd.to_numeric(pbp_organized_df['Home Team Goals'])
-    pbp_organized_df['Away Team Goals'] = pd.to_numeric(pbp_organized_df['Away Team Goals'])
+
+    if ~(((pbp_organized_df['Home Team Goals'].str.contains('-')).any(axis=0) == True) | ((pbp_organized_df['Away Team Goals'].str.contains('-')).any(axis=0) == True)):
+        pbp_organized_df['Home Team Goals'] = pd.to_numeric(pbp_organized_df['Home Team Goals'])
+        pbp_organized_df['Away Team Goals'] = pd.to_numeric(pbp_organized_df['Away Team Goals'])
 
 
     #set even strength as default
     pbp_organized_df['Home Team Players'] = 5
     pbp_organized_df['Away Team Players'] = 5
 
-    #Clock formatting
+    #Clock formatting & sorting
     if pbp_organized_df['Clock'].any(axis=0) != "00:00":
         pbp_organized_df['Clock'] = pd.to_datetime(pbp_organized_df['Clock'], format="%M:%S:%f")
-
+        pbp_organized_df = pbp_organized_df.sort_values(['Period','Clock'], ascending=(True, False))
     #some games do not have time stamps for all events. In this case, the empty clock times are set to 00:00
     else:
         pbp_organized_df.loc[pbp_organized_df['Clock'] == '','Clock'] = "00:00"
@@ -174,9 +176,11 @@ def parse_pbp(raw_pbp):
             pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False)) & (~pbp_unorganized_df['Event'].str.contains('and')) & (assists.notna()), 'Detail 1'] = assists.str.extract(r"(.*)", flags=re.IGNORECASE)[0]
         #2nd assist if it exists
         pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('and'), 'Detail 2'] = assists.str.extract(r"(.*) and (.*),", flags=re.IGNORECASE)[1]
-    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Home Team']), 'Home Team Goals'] -= 1
-    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Away Team']), 'Away Team Goals'] -= 1
 
+    if not (pbp_organized_df['Home Team Goals'].dtype == 'object'):
+        if not (pbp_organized_df['Away Team Goals'].dtype == 'object'):
+            pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Home Team']), 'Home Team Goals'] -= 1
+            pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Away Team']), 'Away Team Goals'] -= 1
 
     #shootout parsing
     #shootout_phrases = ['Shootout']
@@ -203,16 +207,15 @@ def parse_pbp(raw_pbp):
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goalie sub out'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goalie_pull_phrases), case=False), 'Event'].str.extract(r"Goalie sub \w+ (.*)\s?\(.+\)", flags=re.IGNORECASE)[0]
 
     #Penalties + empty net + strength calculations
-    player_penalty_phrases = ['Minor penalty', 'Major Penalty', 'Penalty on']
+    player_penalty_phrases = ['Minor penalty', 'Major penalty','Minor Penalty', 'Major Penalty']
     game_misconduct_phrases = ['Gamemisconduct']
-    team_penalty_phrases = ['Benchminor', 'Benchgamemisconduct']
+    team_penalty_phrases = ['Benchminor']
     #player penalties
     pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases))), 'Event'] = 'Player Penalty'
     if ((pbp_organized_df['Event'] == 'Player Penalty') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
         #first format is if penalized player is serving penalty, second format is if another player is serving the penalty
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[0].str.title()
         pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Player'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
-        #print(pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title() +pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title())
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[1].str.title()
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (~pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*)", flags=re.IGNORECASE)[2]
         pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Detail 2'] = pbp_unorganized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(player_penalty_phrases)))& (pbp_unorganized_df['Event'].str.contains('serving penalty')), 'Event'].str.extract(r"Penalty on (.*)\s?\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[2]
@@ -222,17 +225,24 @@ def parse_pbp(raw_pbp):
                 penalty_min = list(pbp_organized_df[(pbp_organized_df['Event'] == 'Player Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team])]['Clock'])
                 pp_end = list(pbp_organized_df[(pbp_organized_df['Event'] == 'Player Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team])]['Clock']-pd.to_timedelta(pd.to_numeric(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team]), 'Detail 2']), unit='m'))
                 for i in range(len(pp_end)):
-                    pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']), team+' Players'] -= 1
-                    if ((pbp_organized_df['Event'] == 'Goal')&(pbp_organized_df['Team'] !=  pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock'])).any(axis=0) == True:
-                        goal_time = list(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal')&(pbp_organized_df['Team'] != pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']),'Clock'])
-                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (goal_time[0] == pbp_organized_df['Clock']), team+' Players'] = 5
-                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (goal_time[0] >= pbp_organized_df['Clock']), team+' Players'] = 5
-            pbp_organized_df.loc[(pbp_organized_df[team+' Players'] < 3),team+' Players'] = 3
-    #print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Player Penalty')])
+                    coincidental_majors = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i])& (pbp_organized_df['Clock'] == penalty_min[i])) & ((pbp_unorganized_df['Event'].shift(-1).str.contains('Major Penalty')) & (pbp_unorganized_df['Event'].str.contains('Major Penalty'))& (pbp_organized_df['Team'] !=  pbp_organized_df['Team'].shift(-1)))
+                    coincidental_minors_w_existing_penalties = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i]) & (pbp_organized_df['Clock'] == penalty_min[i])) & ((pbp_organized_df['Event'].shift(-1) == 'Player Penalty') & (pbp_organized_df['Event'] == 'Player Penalty')) & ((pbp_organized_df['Home Team Players'] < 5 ) | (pbp_organized_df['Away Team Players'] < 5 )) & (pbp_organized_df['Team'] !=  pbp_organized_df['Team'].shift(-1))
+                    if ~(coincidental_majors.any(axis=0) == True)& ~(coincidental_minors_w_existing_penalties.any(axis=0) == True):
+                        pre_penalty_event_exclusion = ~(((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i]) & (pbp_organized_df['Event'].shift(-1) == 'Player Penalty')) |((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-2)) & (pbp_organized_df['Clock'].shift(-2) == penalty_min[i])& (pbp_organized_df['Event'].shift(-2) == 'Player Penalty'))|((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-3)) & (pbp_organized_df['Clock'].shift(-3) == penalty_min[i])& (pbp_organized_df['Event'].shift(-3) == 'Player Penalty'))|((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-4)) & (pbp_organized_df['Clock'].shift(-4) == penalty_min[i])& (pbp_organized_df['Event'].shift(-4) == 'Player Penalty')))
+                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']) & (pbp_organized_df['Event'] != 'Player Penalty') & pre_penalty_event_exclusion, team+' Players'] -= 1
+                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] > pbp_organized_df['Clock']) & (pbp_organized_df['Event'] == 'Player Penalty') & (pbp_organized_df['Clock'] != penalty_min[i]) & pre_penalty_event_exclusion, team+' Players'] -= 1
+
+                        coincidental = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i])& (pbp_organized_df['Clock'] == penalty_min[i]) & (pbp_organized_df['Event'].shift(-1) == 'Player Penalty') & (pbp_organized_df['Event'] == 'Player Penalty'))
+                        #if there is a goal during the penalty time, the scoring team is not the penalized team, and the strength is not even when the goal is scored, add a player back onto penalized team after goal is scored
+                        if (((pbp_organized_df['Event'] == 'Goal') & (pbp_organized_df['Period'] == period) & (pbp_organized_df['Team'] !=  pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock'])).any(axis=0) == True) & ~(coincidental.any(axis=0) == True):
+                            goal_time = list(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') & (pbp_organized_df['Team'] != pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']),'Clock'])
+                            pre_goal_event_exclusion = ~(((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == goal_time[0]) & (pbp_organized_df['Event'].shift(-1) == 'Goal')))
+                            pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] >= pp_end[i]) & (goal_time[0] >= pbp_organized_df['Clock'])& (pbp_organized_df['Event'] != 'Goal') & (pbp_organized_df['Clock'] != penalty_min[i]) & pre_goal_event_exclusion, team+' Players'] += 1
+                            pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] >= pp_end[i]) & (goal_time[0] > pbp_organized_df['Clock']) & (pbp_organized_df['Event'] == 'Goal') & pre_goal_event_exclusion, team+' Players'] += 1
+                pbp_organized_df.loc[(pbp_organized_df[team+' Players'] < 3),team+' Players'] = 3
 
     #team penalties
     pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases))), 'Event'] = 'Team Penalty'
-    #print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty')])
     if ((pbp_organized_df['Event'] == 'Team Penalty') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
         #setting player who served penalty + penalty + duration
         first = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases)), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[3].str.title()
@@ -240,19 +250,38 @@ def parse_pbp(raw_pbp):
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Player'] = first+" "+last
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 1'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[0].str.title()
         pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Detail 2'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(team_penalty_phrases), case=False), 'Event'].str.extract(r"Penalty on Team\(.+\) for (.*);duration:(.*), (.*),(.*) serving penalty", flags=re.IGNORECASE)[1].str.title()
-    #    print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty'), 'Player'])
+
         #iterating through each team's penalties by period and calculating strength
         for team in ['Home Team', 'Away Team']:
             for period in [1,2,3,4]:
                 penalty_min = list(pbp_organized_df[(pbp_organized_df['Event'] == 'Team Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team])]['Clock'])
                 pp_end = list(pbp_organized_df[(pbp_organized_df['Event'] == 'Team Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team])]['Clock']-pd.to_timedelta(pd.to_numeric(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty') & (pbp_organized_df['Period'] == period)&(pbp_organized_df['Team'] == pbp_organized_df[team]), 'Detail 2']), unit='m'))
                 for i in range(len(pp_end)):
-                    pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']), team+' Players'] -= 1
-                    if ((pbp_organized_df['Event'] == 'Goal')&(pbp_organized_df['Team'] !=  pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock'])).any(axis=0) == True:
-                        goal_time = list(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal')&(pbp_organized_df['Team'] != pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']),'Clock'])
-                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (goal_time[0] == pbp_organized_df['Clock']), team+' Players'] = 5
-                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (goal_time[0] >= pbp_organized_df['Clock']), team+' Players'] = 5
-            pbp_organized_df.loc[(pbp_organized_df[team+' Players'] < 3),team+' Players'] = 3
+                    coincidental_majors = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i])& (pbp_organized_df['Clock'] == penalty_min[i])) & ((pbp_unorganized_df['Event'].shift(-1).str.contains('Major Penalty')) & (pbp_unorganized_df['Event'].str.contains('Major Penalty')))
+                    coincidental_minors_w_existing_penalties = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i]) & (pbp_organized_df['Clock'] == penalty_min[i])) & ((pbp_organized_df['Event'].shift(-1) == 'Team Penalty') & (pbp_organized_df['Event'] == 'Team Penalty')) & ((pbp_organized_df['Home Team Players'] < 5 ) | (pbp_organized_df['Away Team Players'] < 5 ))
+                    if ~(coincidental_majors.any(axis=0) == True)& ~(coincidental_minors_w_existing_penalties.any(axis=0) == True):
+                        pre_penalty_event_exclusion = ~(((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i]) & (pbp_organized_df['Event'].shift(-1) == 'Team Penalty')) |((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-2)) & (pbp_organized_df['Clock'].shift(-2) == penalty_min[i])& (pbp_organized_df['Event'].shift(-2) == 'Team Penalty'))|((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-3)) & (pbp_organized_df['Clock'].shift(-3) == penalty_min[i])& (pbp_organized_df['Event'].shift(-3) == 'Team Penalty'))|((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-4)) & (pbp_organized_df['Clock'].shift(-4) == penalty_min[i])& (pbp_organized_df['Event'].shift(-4) == 'Team Penalty')))
+                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']) & (pbp_organized_df['Event'] != 'Team Penalty') & pre_penalty_event_exclusion, team+' Players'] -= 1
+                        pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] > pbp_organized_df['Clock']) & (pbp_organized_df['Event'] == 'Team Penalty') & (pbp_organized_df['Clock'] != penalty_min[i]) & pre_penalty_event_exclusion, team+' Players'] -= 1
+
+                        coincidental = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == penalty_min[i])& (pbp_organized_df['Clock'] == penalty_min[i]) & (pbp_organized_df['Event'].shift(-1) == 'Team Penalty') & (pbp_organized_df['Event'] == 'Team Penalty'))
+                        #if there is a goal during the penalty time, the scoring team is not the penalized team, and the strength is not even when the goal is scored, add a player back onto penalized team after goal is scored
+                        if (((pbp_organized_df['Event'] == 'Goal') & (pbp_organized_df['Period'] == period) & (pbp_organized_df['Team'] !=  pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock'])).any(axis=0) == True) & ~(coincidental.any(axis=0) == True):
+                            goal_time = list(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') & (pbp_organized_df['Team'] != pbp_organized_df[team])& (pbp_organized_df['Clock'] > pp_end[i]) & (penalty_min[i] >= pbp_organized_df['Clock']),'Clock'])
+                            pre_goal_event_exclusion = ~(((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & (pbp_organized_df['Clock'].shift(-1) == goal_time[0]) & (pbp_organized_df['Event'].shift(-1) == 'Goal')))
+                            pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] >= pp_end[i]) & (goal_time[0] >= pbp_organized_df['Clock'])& (pbp_organized_df['Event'] != 'Goal') & (pbp_organized_df['Clock'] != penalty_min[i]) & pre_goal_event_exclusion, team+' Players'] += 1
+                            pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] >= pp_end[i]) & (goal_time[0] > pbp_organized_df['Clock']) & (pbp_organized_df['Event'] == 'Goal') & pre_goal_event_exclusion, team+' Players'] += 1
+                pbp_organized_df.loc[(pbp_organized_df[team+' Players'] < 3),team+' Players'] = 3
+
+    #print(pbp_organized_df.iloc[60:70])
+
+    #if clock is equal to goal time and index is not less than goal index, do n
+    # & (pbp_organized_df['Event'] != 'Team Penalty')
+    pre_penalty_event_exclusion = ((pbp_organized_df['Clock'] == pbp_organized_df['Clock'].shift(-1)) & ((pbp_organized_df['Event'].shift(-1) == 'Team Penalty') | (pbp_organized_df['Event'].shift(-2) == 'Team Penalty')| (pbp_organized_df['Event'].shift(-3) == 'Team Penalty')| (pbp_organized_df['Event'].shift(-4) == 'Team Penalty')| (pbp_organized_df['Event'].shift(-5) == 'Team Penalty')))
+    #print(pbp_organized_df['Event'].shift(-1)[63:74])
+    #print(pbp_organized_df.iloc[80:86])
+    #print(coincidental.iloc[80:86])
+
     #print(pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Team Penalty')])
 
     #empty_net_phrases = ['Empty Net']
@@ -263,7 +292,9 @@ def parse_pbp(raw_pbp):
     #clock formatting
     pbp_organized_df['Clock'] = pbp_organized_df['Clock'].dt.time
 
-    #pbp_organized_df.to_csv('test_pbp.csv',index=False)
+    #filtering out repeated shots after goals
+    double_count_shots = (pbp_organized_df['Player'] == pbp_organized_df['Player'].shift(1)) & (pbp_organized_df['Event'] == 'Shot')
+    pbp_organized_df = pbp_organized_df[~double_count_shots]
 
     return pbp_organized_df
 
@@ -281,8 +312,14 @@ def run_full_scrape(games):
     game_no = 0
 
     while game_no < len(event_list):
+
+
         event_id = event_list.loc[game_no]
         date = dates[game_no]
+        # Print the event_id and game_no so we can keep track of progress while the code runs:
+        print(event_id)
+        print(game_no)
+
         pbp_scrape(date, event_list, game_no, filename1)
 
         # Iterate to the next game:
@@ -292,7 +329,3 @@ def run_full_scrape(games):
         # Sleep for a few seconds to avoid overloading the server:
         time.sleep(randint(2,3))
         '''
-
-        # Print the event_id and game_no so we can keep track of progress while the code runs:
-        print(event_id)
-        print(game_no)
