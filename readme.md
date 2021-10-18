@@ -14,6 +14,7 @@ of https://stats.ncaa.org/contests/2120211/box_score) for games played between s
 
 ## Cases currently unaccounted for + to be fixed, in order of priority
 - occasional pbp data that is a different format than the main format (ie https://stats.ncaa.org/game/play_by_play/5128689). PBP will be processed with no players or details for events and incorrect strength + goal timing formatting)
+- double or triple minors to the same player
 - games before the 2021 season
 - Powerplays spanning periods
 - games with scores of 10 or more goals
