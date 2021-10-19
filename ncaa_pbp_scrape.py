@@ -65,7 +65,8 @@ def pbp_scrape(date, event_id, dir=None):
 
     def processRow(row, period_no):
         [clock_time, event, score, extra] = [element.get_text(strip=True) for element in row.select('tr>td')]
-        return [date, pbp_game_id, home_team, away_team, period_no, score[0], score[2], clock_time, event, extra]
+        [home_score, away_score] = score.split("-")
+        return [date, pbp_game_id, home_team, away_team, period_no, home_score, away_score, clock_time, event, extra]
 
     # ignore first row (the one with the teams, time, etc and last row (period end)
     for i, period in enumerate(nested_periods):
