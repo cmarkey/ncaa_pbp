@@ -6,6 +6,7 @@ import time
 from random import randint
 import regex as re
 import pandas as pd
+from tqdm import tqdm
 
 
 # Assign headers to use with requests.get - this helps to avoid a permissions error
@@ -27,7 +28,7 @@ def find_pbp_id(sched_id):
     '''
 
     # Extracts the HTML from the URL for the specific game:
-    url = "https://stats.ncaa.org/contests/{}/box_score".format(sched_id)
+    url = f"https://stats.ncaa.org/contests/{sched_id}/box_score"
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
 
@@ -45,48 +46,30 @@ def find_pbp_id(sched_id):
     # Return the PBP game ID
     return pbp_id
 
-def pbp_scrape(date, event_list, game_no, dir=None):
-    #filename1 should be the desired name of the output file
-    event_id = event_list[game_no]
+def pbp_scrape(date, event_id, dir=None):
     # Pull the PBP game ID for the specified game
     pbp_game_id = find_pbp_id(event_id)
-    filename = str(date)+"_"+str(event_id)+".csv"
+    filename = f"{date}_{event_id}.csv"
     # Specify the PBP page to extract, and pull its source code:
-    url = "https://stats.ncaa.org/game/play_by_play/{}".format(pbp_game_id)
+    url = f"https://stats.ncaa.org/game/play_by_play/{pbp_game_id}"
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
 
     # Extract the data from each period's table
-    period1 = soup.find_all("table", class_="mytable")[1]
-    period2 = soup.find_all("table", class_="mytable")[2]
-    period3 = soup.find_all("table", class_="mytable")[3]
-    if len(soup.find_all("table", class_="mytable")) > 4:
-        period4 = soup.find_all("table", class_="mytable")[4]
-    else:
-        # This is a lazy fix to an error - period 4 gets ignored if there was no OT in the game
-        period4 = soup.find_all("table", class_="mytable")[1]
+    nested_periods = [period.find_all('tr') for period in soup.find_all("table", class_="mytable")[1:]]
 
-    # Extract the individual rows from each table:
-    # There's probably a way to combine all of these into one to reduce the later code
-    p1rows = period1.find_all('tr')
-    p2rows = period2.find_all('tr')
-    p3rows = period3.find_all('tr')
-    away_team = p1rows[0].select('tr > td')[1].get_text(strip=True)
-    home_team = p1rows[0].select('tr > td')[3].get_text(strip=True)
-    # Initialize empty list:
+    # Extract home and away team names
+    [_, away_team, _, home_team] = [td.get_text(strip=True) for td in nested_periods[0][0].select('tr>td')]
+
     all_plays = []
 
-    # Add each row to the master list:
-    for i in range(1, len(p1rows)-1):
-        all_plays.append([str(date),pbp_game_id, home_team, away_team, 1, p1rows[i].select('tr > td')[2].get_text(strip=True)[0], p1rows[i].select('tr > td')[2].get_text(strip=True)[2], p1rows[i].select('tr > td')[0].get_text(strip=True), p1rows[i].select('tr > td')[1].get_text(strip=True), p1rows[i].select('tr > td')[3].get_text(strip=True)])
-    for i in range(1, len(p2rows)-1):
-        all_plays.append([str(date),pbp_game_id, home_team, away_team, 2, p2rows[i].select('tr > td')[2].get_text(strip=True)[0], p2rows[i].select('tr > td')[2].get_text(strip=True)[2], p2rows[i].select('tr > td')[0].get_text(strip=True), p2rows[i].select('tr > td')[1].get_text(strip=True), p2rows[i].select('tr > td')[3].get_text(strip=True)])
-    for i in range(1, len(p3rows)-1):
-        all_plays.append([str(date), pbp_game_id, home_team, away_team, 3, p3rows[i].select('tr > td')[2].get_text(strip=True)[0], p3rows[i].select('tr > td')[2].get_text(strip=True)[2], p3rows[i].select('tr > td')[0].get_text(strip=True) , p3rows[i].select('tr > td')[1].get_text(strip=True), p3rows[i].select('tr > td')[3].get_text(strip=True)])
-    if len(soup.find_all("table", class_="mytable")) > 4:
-        p4rows = period4.find_all('tr')
-        for i in range(1, len(p4rows)-1):
-            all_plays.append([str(date),pbp_game_id, home_team, away_team, 4, p4rows[i].select('tr > td')[2].get_text(strip=True)[0], p4rows[i].select('tr > td')[2].get_text(strip=True)[2], p4rows[i].select('tr > td')[0].get_text(strip=True), p4rows[i].select('tr > td')[1].get_text(strip=True), p4rows[i].select('tr > td')[3].get_text(strip=True)])
+    def processRow(row, period_no):
+        [clock_time, event, score, extra] = [element.get_text(strip=True) for element in row.select('tr>td')]
+        return [date, pbp_game_id, home_team, away_team, period_no, score[0], score[2], clock_time, event, extra]
+
+    # ignore first row (the one with the teams, time, etc and last row (period end)
+    for i, period in enumerate(nested_periods):
+        all_plays += [processRow(row, i+1) for row in period[1:-1]]
 
     clean_pbp = parse_pbp(all_plays)
 
@@ -120,13 +103,10 @@ def parse_pbp(raw_pbp):
     pbp_organized_df['Away Team Players'] = 5
 
     #Clock formatting & sorting
-    if pbp_organized_df['Clock'].any(axis=0) != "00:00":
-        pbp_organized_df['Clock'] = pd.to_datetime(pbp_organized_df['Clock'], format="%M:%S:%f")
-        pbp_organized_df = pbp_organized_df.sort_values(['Period','Clock'], ascending=(True, False))
+    pbp_organized_df.loc[pbp_organized_df['Clock'] == '','Clock'] = "00:00:00"
+    pbp_organized_df['Clock'] = pd.to_datetime(pbp_organized_df['Clock'], format="%M:%S:%f",errors="coerce")
+    pbp_organized_df = pbp_organized_df.sort_values(['Period','Clock'], ascending=(True, False))
     #some games do not have time stamps for all events. In this case, the empty clock times are set to 00:00
-    else:
-        pbp_organized_df.loc[pbp_organized_df['Clock'] == '','Clock'] = "00:00"
-        pbp_organized_df['Clock'] = pd.to_datetime(pbp_organized_df['Clock'], format="%M:%S")
 
     #parsing events, each code chunk is a type of event
     #shots, shot type, shooting player, blocking player if blocked, saving goalie if missed
@@ -299,33 +279,16 @@ def parse_pbp(raw_pbp):
     return pbp_organized_df
 
 def run_full_scrape(games):
-
-    # Build a list of all of the games you would like to scrape, using the game IDs found in the schedule:
-    event_list = games[1]
-    dates = games[0]
-
-    # Name your output files, using today's date in the file names:
-    today = "-" + datetime.date.today().strftime("%m-%d")
-    filename1 = "ncaa-pbp" + today + ".csv"
+    """
+    :param a list of games, with each game formatted as [date, event_id]
+    """
 
     # Run the code for each game in the event_list
-    game_no = 0
+    with tqdm(games) as t:
+        for date, event_id in t:
+            t.set_description(f"Event ID: {event_id}")
 
-    while game_no < len(event_list):
+            pbp_scrape(date, event_id, filename1)
 
-
-        event_id = event_list.loc[game_no]
-        date = dates[game_no]
-        # Print the event_id and game_no so we can keep track of progress while the code runs:
-        print(event_id)
-        print(game_no)
-
-        pbp_scrape(date, event_list, game_no, filename1)
-
-        # Iterate to the next game:
-        game_no = game_no + 1
-
-        '''
-        # Sleep for a few seconds to avoid overloading the server:
-        time.sleep(randint(2,3))
-        '''
+            # Sleep for a few seconds to avoid overloading the server:
+            # time.sleep(randint(2,3))
