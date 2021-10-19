@@ -7,7 +7,7 @@ from random import randint
 import regex as re
 import pandas as pd
 from tqdm import tqdm
-
+import os
 
 # Assign headers to use with requests.get - this helps to avoid a permissions error
 headers = {
@@ -46,10 +46,18 @@ def find_pbp_id(sched_id):
     # Return the PBP game ID
     return pbp_id
 
-def pbp_scrape(date, event_id, dir=None):
+def pbp_scrape(date, event_id, dir):
+    """
+    :param date date: the date of the game being scraped
+    :param str event_id: the event id of the game being scraped
+    :param str dir: the filepath of the directory where the pbp should be stored
+    """
     # Pull the PBP game ID for the specified game
     pbp_game_id = find_pbp_id(event_id)
-    filename = f"{date}_{event_id}.csv"
+
+    # get the filename for the output
+    filename = os.path.join(dir, f"{date}_{event_id}.csv")
+
     # Specify the PBP page to extract, and pull its source code:
     url = f"https://stats.ncaa.org/game/play_by_play/{pbp_game_id}"
     response = requests.get(url, headers=headers)
@@ -279,17 +287,19 @@ def parse_pbp(raw_pbp):
 
     return pbp_organized_df
 
-def run_full_scrape(games):
+def run_full_scrape(games, pbp_dir):
     """
-    :param a list of games, with each game formatted as [date, event_id]
+    :param List[date, int] games: a list of games, with each game formatted as [date, event_id]
+    :param str pbp_dir: the filepath of the directory that pbp's should be saved to
     """
 
     # Run the code for each game in the event_list
+    print("Scrape PBP Data per Event")
     with tqdm(games) as t:
         for date, event_id in t:
-            t.set_description(f"Event ID: {event_id}")
+            t.set_description(f"Date: {date}, Event ID: {event_id}")
 
-            pbp_scrape(date, event_id)
+            pbp_scrape(date, event_id, pbp_dir)
 
             # Sleep for a few seconds to avoid overloading the server:
             # time.sleep(randint(2,3))

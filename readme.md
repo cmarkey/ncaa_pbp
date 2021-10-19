@@ -9,11 +9,12 @@ Thanks to Dave MacPherson for setting up the scraping portion of this and Gilles
 ## To use
 
 -   Install all the required packages listed in "requirements.txt" (if you are using pip, you can do this by running `pip install -r requirements.txt`).
--   In "full_scrape.py" specify the start (start_date) and end dates (end_date) line you wish to scrape.
--   Ensure that season_id is correct. This can be checked by going to https://stats.ncaa.org/contests/scoreboards, selecting women's ice hockey & the desired division, and then getting the season_id out of the URL (ie 17800 from https://stats.ncaa.org/contests/scoreboards?utf8=%E2%9C%93&season_division_id=17800&game_date=10%2F21%2F2021&conference_id=0&tournament_id=&commit=Submit)
--   Run "full_scrape.py"
--   For the full list of event IDs, run ncaa-schedule-finder.py to pull all the event IDs (unique schedule ID that appears in the middle
-    of https://stats.ncaa.org/contests/2120211/box_score) for games played between specified dates. The event ID is the ID that appears in the schedule, the game ID is the ID used to fetch the play by play for a specific game
+-   In "full_scrape.py" specify the start (`start_date`) and end dates (`end_date`) line you wish to scrape.
+-   Ensure that `season_id` is correct. This can be checked by going to https://stats.ncaa.org/contests/scoreboards, selecting women's ice hockey & the desired division, and then getting the season_id out of the URL (ie 17800 from https://stats.ncaa.org/contests/scoreboards?utf8=%E2%9C%93&season_division_id=17800&game_date=10%2F21%2F2021&conference_id=0&tournament_id=&commit=Submit)
+-   If you want to save the full list of event IDs for the specified dates, set `schedule_filename` to be equal to the filepath you want the .csv to be saved to.
+    -   The event ID is the unique schedule ID that appears in https://stats.ncaa.org/contests/{event_id}/box_score. This event ID is distinct from the game ID used to fetch the play by play for a specific game.
+    -   For example, in https://stats.ncaa.org/contests/2120211/box_score, the event ID is 2120211.
+-   Run "full_scrape.py".
 
 ## Cases currently unaccounted for + to be fixed, in order of priority
 
