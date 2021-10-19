@@ -288,7 +288,7 @@ def run_full_scrape(games):
         for date, event_id in t:
             t.set_description(f"Event ID: {event_id}")
 
-            pbp_scrape(date, event_id, filename1)
+            pbp_scrape(date, event_id)
 
             # Sleep for a few seconds to avoid overloading the server:
             # time.sleep(randint(2,3))
