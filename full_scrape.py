@@ -8,7 +8,7 @@ from tqdm import tqdm
 import os
 
 
-def scrape(start_date, end_date, season_id, headers, schedule_filename=None, pbp_dir="./"):
+def full_scrape(start_date, end_date, season_id, headers, schedule_filename=None, pbp_dir="./"):
     """
     :param date start_date: starting date to scrape (inclusive)
     :param date end_date: ending date to scrape (inclusive)
@@ -23,8 +23,11 @@ def scrape(start_date, end_date, season_id, headers, schedule_filename=None, pbp
     """
 
     # create any needed folders for pbp_dir
-    if not os.path.exists(pbp_dir):
-        os.makedirs(pbp_dir)
+    if pbp_dir:
+        if not os.path.exists(pbp_dir):
+            os.makedirs(pbp_dir)
+    else:
+        pbp_dir = "./"
 
     # Initialize the date variable to iterate through
     current_date = start_date
@@ -91,14 +94,14 @@ if __name__ == "__main__":
     # 2021-22 season id. Grab this from the URL on the schedule page. Ex: https://stats.ncaa.org/season_divisions/17460/scoreboards?
     SEASON_ID = 17800
 
-    start_date = date(2021, 9, 18)
-    end_date = date(2021, 9, 20)
+    start_date = date(2021, 10, 9)
+    end_date = date(2021, 10, 9)
 
     # OPTIONAL: if you want to save a csv of dates and event ids, indicate the filename here
     schedule_filename = None
 
     # OPTIONAL: if you want to save the pbp csv's in a directory, indicate it here
-    # if not indicated, they will be saved to the current directory
-    pbp_dir = "pbp_new"
+    # if not indicated, csv's will be saved to the current directory
+    pbp_dir = "pbp"
 
-    scrape(start_date, end_date, SEASON_ID, HEADERS, schedule_filename, pbp_dir)
+    full_scrape(start_date, end_date, SEASON_ID, HEADERS, schedule_filename, pbp_dir)

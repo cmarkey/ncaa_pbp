@@ -22,7 +22,6 @@ Thanks to Dave MacPherson for setting up the scraping portion of this and Gilles
 -   occasional pbp data that is a different format than the main format (ie https://stats.ncaa.org/game/play_by_play/5128689). PBP will be processed with no players or details for events and incorrect strength + goal timing formatting)
 -   double or triple minors to the same player
 -   games before the 2021 season
--   Powerplays spanning periods
 -   teams containing parentheses
 -   2+ goalscorers, not sure how that would even happen but it's in the pbp
 
