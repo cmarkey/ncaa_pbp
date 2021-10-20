@@ -9,6 +9,8 @@ import pandas as pd
 from tqdm import tqdm
 import os
 
+debug = False
+
 # Assign headers to use with requests.get - this helps to avoid a permissions error
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36',
@@ -72,21 +74,26 @@ def pbp_scrape(date, event_id, dir):
     all_plays = []
 
     def processRow(row, period_no):
-        [clock_time, event, score, extra] = [element.get_text(strip=True) for element in row.select('tr>td')]
+        [clock_time, away_team_event, score, home_team_event] = [element.get_text(strip=True) for element in row.select('tr>td')]
         [home_score, away_score] = score.split("-")
-        return [date, pbp_game_id, home_team, away_team, period_no, home_score, away_score, clock_time, event, extra]
+        return [date, pbp_game_id, home_team, away_team, period_no, home_score, away_score, clock_time, away_team_event, home_team_event]
 
     # ignore first row (the one with the teams, time, etc and last row (period end)
     for i, period in enumerate(nested_periods):
         all_plays += [processRow(row, i+1) for row in period[1:-1]]
 
-    clean_pbp = parse_pbp(all_plays)
+    if debug:
+        return parse_pbp(all_plays)
 
+    clean_pbp = parse_pbp(all_plays)
     clean_pbp.to_csv(filename,index=False)
 
 def parse_pbp(raw_pbp):
+    # columns that really just get carried over verbatim from the original dataset
+    carry_columns = ['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock']
+
     #setting the list pbp as a dataframe
-    pbp_unorganized_df = pd.DataFrame(raw_pbp, columns=['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock', 'Away Team Event', 'Home Team Event'])
+    pbp_unorganized_df = pd.DataFrame(raw_pbp, columns=(carry_columns+['Away Team Event', 'Home Team Event']))
 
     #filtering out pbp lines that have no impact on play, and no impact the interpretation of other events
     #this code chunk has to be here otherwise the rest of the code breaks
@@ -94,82 +101,101 @@ def parse_pbp(raw_pbp):
     pbp_unorganized_df['Event'] = pbp_unorganized_df['Home Team Event']+pbp_unorganized_df['Away Team Event']
     pbp_filter = pbp_unorganized_df['Event'].str.contains('|'.join(unwanted_pbp), case=False)
     pbp_unorganized_df = pbp_unorganized_df[~pbp_filter]
-    pbp_organized_df = pd.DataFrame(columns = ['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock', 'Home Team Players','Away Team Players', 'Team', 'Event','Player','Detail 1','Detail 2','Player 2', 'Goalie'])
-    pbp_organized_df[['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock']] = pbp_unorganized_df[['Date','Game ID', 'Home Team','Away Team','Period', 'Home Team Goals', 'Away Team Goals', 'Clock']]
+    pbp_organized_df = pd.DataFrame(columns = carry_columns + ['Home Team Players','Away Team Players', 'Team', 'Event', 'Player','Detail 1','Detail 2','Player 2', 'Goalie'])
+    pbp_organized_df[carry_columns] = pbp_unorganized_df[carry_columns]
 
     #Set team who created event
     pbp_organized_df.loc[pbp_unorganized_df['Away Team Event'] == '', 'Team'] = pbp_organized_df['Home Team']
     pbp_organized_df.loc[pbp_unorganized_df['Home Team Event'] == '', 'Team'] = pbp_organized_df['Away Team']
-    pbp_unorganized_df['Event'] = pbp_unorganized_df['Home Team Event']+pbp_unorganized_df['Away Team Event']
 
-    if ~(((pbp_organized_df['Home Team Goals'].str.contains('-')).any(axis=0) == True) | ((pbp_organized_df['Away Team Goals'].str.contains('-')).any(axis=0) == True)):
-        pbp_organized_df['Home Team Goals'] = pd.to_numeric(pbp_organized_df['Home Team Goals'])
-        pbp_organized_df['Away Team Goals'] = pd.to_numeric(pbp_organized_df['Away Team Goals'])
-
+    # typecast goals to be numeric
+    pbp_organized_df[['Home Team Goals', 'Away Team Goals']] = pbp_organized_df[['Home Team Goals', 'Away Team Goals']].apply(pd.to_numeric, errors='ignore')
 
     #set even strength as default
     pbp_organized_df['Home Team Players'] = 5
     pbp_organized_df['Away Team Players'] = 5
 
     #Clock formatting & sorting
-    pbp_organized_df.loc[pbp_organized_df['Clock'] == '','Clock'] = "00:00:00"
     pbp_organized_df['Clock'] = pd.to_datetime(pbp_organized_df['Clock'], format="%M:%S:%f",errors="coerce")
     pbp_organized_df = pbp_organized_df.sort_values(['Period','Clock'], ascending=(True, False))
-    #some games do not have time stamps for all events. In this case, the empty clock times are set to 00:00
 
-    #parsing events, each code chunk is a type of event
-    #shots, shot type, shooting player, blocking player if blocked, saving goalie if missed
+    ####################################################
+    #parsing events, each code chunk is a type of event#
+    ####################################################
+
+
+    #
+    # shots, shot type, shooting player, blocking player if blocked, saving goalie if missed
+    #
     shot_phrases = ['Shot']
-    shot_types = ['Missed', 'Wide', 'Blocked']
-    pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'] = 'Shot'
+    shot_types = ['Missed', 'Wide', 'Blocked', 'Pipe']
+
+    shot_mask = pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False).fillna(False)
+
+    pbp_organized_df.loc[shot_mask, 'Event'] = 'Shot'
     for type in shot_types:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot') & (pbp_unorganized_df['Event'].str.contains(type, case=False)), 'Detail 1'] = type
+        pbp_organized_df.loc[shot_mask & (pbp_unorganized_df['Event'].str.contains(type, case=False)), 'Detail 1'] = type
     #format 1
-    if ((pbp_organized_df['Event'] == 'Shot') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'].str.extract(r"Shot by (.*)\(.+\)", flags=re.IGNORECASE)[0]
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Goalie'] = pbp_unorganized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Event'].str.extract(r"save (.*)", flags=re.IGNORECASE)[0]
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player 2'] = pbp_unorganized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Event'].str.extract(r"BLOCKED by (.*)", flags=re.IGNORECASE)[0]
+    if (
+        (pbp_organized_df["Event"] == "Shot")
+        & pbp_unorganized_df["Event"].str.contains("\(")
+    ).any(axis=0) == True:
+        pbp_organized_df.loc[shot_mask, ["Player", "Player 2", "Goalie"]] = (
+            pbp_unorganized_df.loc[shot_mask, "Event"]
+            .str.extract(
+                r"Shot by (.*)\(.+\) *(BLOCKED by (.*)|MISSED, save (.*)|WIDE|MISSED|PIPE)",
+                flags=re.IGNORECASE,
+            )
+            .rename(columns={0: "Player", 2: "Player 2", 3: "Goalie"})
+            .drop(columns=[1])
+        )
+
     #format 2
     #elif len(((pbp_organized_df['Event'] == 'Shot') & pbp_unorganized_df['Event'].str.contains('\,')) :
     #    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'].str.split().str[3] + " "+pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False), 'Event'].str.split(' |\(').str[4]
     #    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot') & (pbp_organized_df['Detail 1'] == 'Missed'), 'Goalie'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('save', case=False), 'Event'].str.split('\.| ').str[-3] + " "+pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('save', case=False), #'Event'].str.split('\.| ').str[-2]
     #    pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Shot') & (pbp_organized_df['Detail 1'] == 'Blocked'), 'Player 2'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('blocked', case=False), 'Event'].str.split('\.| ').str[-3] + " "+pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(shot_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('blocked', case=False), #'Event'].str.split('\.| ').str[-2]
 
-    #faceoff parsing
+    #
+    # faceoff parsing
+    #
     faceoff_phrases = ['Faceoff', 'Face off']
-    pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False), 'Event'] = 'Faceoff Won'
-    #format 1
-    if ((pbp_organized_df['Event'] == 'Faceoff Won') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
+    faceoff_mask = pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False).fillna(False)
+    pbp_organized_df.loc[faceoff_mask, 'Event'] = 'Faceoff Won'
+
+    # format 1
+    if (faceoff_mask & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
+        faceoff_info = pbp_unorganized_df.loc[faceoff_mask, 'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)
         #setting Player as winner of faceoff
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Faceoff Won'), 'Player'] = pbp_unorganized_df.loc[pbp_organized_df['Event']=='Faceoff Won', 'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[2]
+        pbp_organized_df.loc[faceoff_mask, 'Player'] = faceoff_info[2]
         #setting the losers as Player 2
-        away_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[0]
-        home_faceoff_players = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(faceoff_phrases), case=False),'Event'].str.extract(r"Faceoff (.*) vs (.*), won by (.*)\s?\(.+\)", flags=re.IGNORECASE)[1]
-        faceoff_home_loser = ((pbp_organized_df['Team'] == pbp_organized_df['Away Team']) & (pbp_organized_df['Event'] == 'Faceoff Won'))
-        faceoff_away_loser = ((pbp_organized_df['Team'] == pbp_organized_df['Home Team']) & (pbp_organized_df['Event'] == 'Faceoff Won'))
-        pbp_organized_df.loc[faceoff_home_loser, 'Player 2'] = home_faceoff_players
-        pbp_organized_df.loc[faceoff_away_loser, 'Player 2'] = away_faceoff_players
+        pbp_organized_df.loc[faceoff_mask, 'Player 2'] = faceoff_info.apply(lambda x: x[0] if x[0] != x[2] else x[1], axis="columns")
 
-    #goal parsing
+    #
+    # goal parsing
+    #
     goal_phrases = ['Goal ']
-    pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'] = 'Goal'
-    #format 1
-    if ((pbp_organized_df['Event'] == 'Goal') & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
-        pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal'), 'Player'] = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(.+\)", flags=re.IGNORECASE)[0]
-        #1st assist
-        assists = pbp_unorganized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False), 'Event'].str.extract(r"GOAL by (.*) \s?\(.+\),\s?Assist by (.*) On ice for \.+: On ice for \.+:", flags=re.IGNORECASE)[1]
-        assists = assists[assists.notna()]
-        #1st assist if it exists
-        pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('and'), 'Detail 1'] = assists.str.extract(r"(.*) and (.*),", flags=re.IGNORECASE)[0]
-        if pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False)) & (~pbp_unorganized_df['Event'].str.contains('and')) & (assists.notna())].empty == False:
-            pbp_organized_df.loc[(pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False)) & (~pbp_unorganized_df['Event'].str.contains('and')) & (assists.notna()), 'Detail 1'] = assists.str.extract(r"(.*)", flags=re.IGNORECASE)[0]
-        #2nd assist if it exists
-        pbp_organized_df.loc[pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False) & pbp_unorganized_df['Event'].str.contains('and'), 'Detail 2'] = assists.str.extract(r"(.*) and (.*),", flags=re.IGNORECASE)[1]
+    goal_mask = pbp_unorganized_df['Event'].str.contains('|'.join(goal_phrases), case=False).fillna(False)
+    pbp_organized_df.loc[goal_mask, 'Event'] = 'Goal'
 
-    if not (pbp_organized_df['Home Team Goals'].dtype == 'object'):
-        if not (pbp_organized_df['Away Team Goals'].dtype == 'object'):
-            pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Home Team']), 'Home Team Goals'] -= 1
-            pbp_organized_df.loc[(pbp_organized_df['Event'] == 'Goal') &(pbp_organized_df['Team'] ==  pbp_organized_df['Away Team']), 'Away Team Goals'] -= 1
+    # format 1
+    if (goal_mask & pbp_unorganized_df['Event'].str.contains('\(')).any(axis=0) == True:
+        goal_info = pbp_unorganized_df.loc[goal_mask,'Event'].str.extract(r"GOAL by (.*) \s?\(.+\),\s?Assist by ((.*) and (.*),|(.*)) On ice for .+: On ice for .+:", flags=re.IGNORECASE)
+
+        # goalscorer goes in Player, primary assist player goes in Detail 1, secondary assist player goes in Detail 2
+        pbp_organized_df.loc[goal_mask, ["Player", "Detail 1", "Detail 2"]] = (
+            goal_info.assign(temp=lambda x: x[2].fillna("") + x[4].fillna(""))
+            .drop(columns=[1, 2, 4])
+            .rename(columns={0: "Player", "temp": "Detail 1", 3: "Detail 2"})
+        )
+
+    if not (pbp_organized_df['Home Team Goals'].dtype == 'object' or pbp_organized_df['Away Team Goals'].dtype == 'object'):
+        # modify goals so the score change doesn't start until after the goal event
+        pbp_organized_df.loc[goal_mask & (pbp_organized_df['Team'] ==  pbp_organized_df['Home Team']), 'Home Team Goals'] -= 1
+        pbp_organized_df.loc[goal_mask & (pbp_organized_df['Team'] ==  pbp_organized_df['Away Team']), 'Away Team Goals'] -= 1
+
+    if debug:
+        return((pbp_unorganized_df, pbp_organized_df))
 
     #shootout parsing
     #shootout_phrases = ['Shootout']
@@ -262,7 +288,6 @@ def parse_pbp(raw_pbp):
                             pbp_organized_df.loc[(pbp_organized_df['Period'] == period) & (pbp_organized_df['Clock'] >= pp_end[i]) & (goal_time[0] > pbp_organized_df['Clock']) & (pbp_organized_df['Event'] == 'Goal') & pre_goal_event_exclusion, team+' Players'] += 1
                 pbp_organized_df.loc[(pbp_organized_df[team+' Players'] < 3),team+' Players'] = 3
 
-    #print(pbp_organized_df.iloc[60:70])
 
     #if clock is equal to goal time and index is not less than goal index, do n
     # & (pbp_organized_df['Event'] != 'Team Penalty')
