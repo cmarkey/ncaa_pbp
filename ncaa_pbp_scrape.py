@@ -270,21 +270,23 @@ def parse_pbp(raw_pbp):
     #
     # calculate strength
     #
+
+    def adjust_strength(penalty, current_row):
+        # ignore coincidental penalties
+        if not (penalty["start_time"] == current_row.Clock and "Penalty" in current_row.Event):
+            # decrement players
+            current_row[f"{penalty['team']} Players"] -= 1
+            # prevent issues with penalty -> other event -> penalty all at the same time indicator
+            penalty["start_time"] = None
+        return penalty
+
     penalties = []
     for i in range(pbp_organized_df.shape[0]):
-        current_row = pbp_organized_df.iloc[i]
+        current_row = pbp_organized_df.iloc[i].copy()
 
-        # adjust strength based on existing penalties
-        def adjust_strength(penalty):
-            # ignore coincidental penalties
-            # will screw up if penalty -> other event -> penalty all at the same time indicator
-            if not (penalty["start_time"] == current_row.Clock and "Penalty" in current_row.Event):
-                current_row[f"{penalty['team']} Players"] -= 1
-            return penalty
-
-
+        # adjust strength based on existing penalties and get rid of expired penalties
         penalties = [
-            adjust_strength(penalty)
+            adjust_strength(penalty, current_row)
             for penalty in penalties
             if (current_row.Period < penalty["end_period"])
             or (
@@ -324,7 +326,7 @@ def parse_pbp(raw_pbp):
         # if there is a goal during the penalty time,
         # the scoring team is not the penalized team,
         # and the strength is not even when the goal is scored,
-        # add a player back onto penalized team after goal is scored
+        # essentially negate a penalty by removing it
         if current_row.Event == "Goal" and current_row["Home Team Players"] != current_row["Away Team Players"]:
             for penalty in penalties:
                 if current_row['Team'] != penalty['team']:
