@@ -1,0 +1,12 @@
+LICENSE
+pyproject.toml
+setup.cfg
+src/ncaa_pbp/__init__.py
+src/ncaa_pbp/full_scrape.py
+src/ncaa_pbp/ncaa-schedule-finder.py
+src/ncaa_pbp/ncaa_pbp_scrape.py
+src/ncaa_pbp.egg-info/PKG-INFO
+src/ncaa_pbp.egg-info/SOURCES.txt
+src/ncaa_pbp.egg-info/dependency_links.txt
+src/ncaa_pbp.egg-info/requires.txt
+src/ncaa_pbp.egg-info/top_level.txt
