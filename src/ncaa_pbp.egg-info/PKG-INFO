@@ -1,7 +1,23 @@
+Metadata-Version: 2.1
+Name: ncaa-pbp
+Version: 0.0.1
+Summary: Package to pull NCAA women's hockey play by play data
+Home-page: https://github.com/cmarkey/ncaa_pbp
+Author: Carleen Markey
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/cmarkey/ncaa_pbp/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
 ## About
 This code is designed to pull NCAA women'S hockey pbp data (DI, DII or DIII) from stats.ncaa.org, put it
 in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
-"GameYear-GameMonth-GameDay_eventid.csv". Designed for educational/academic research use only. See the end of this doc for the full data format.
+"GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format.
 
 Thanks to Dave MacPherson for setting up the scraping portion of this and Gilles Dignard for providing independently scraped pbp which was heavily used as a reference for parsing and testing.
 
@@ -78,3 +94,5 @@ Player Penalty
 - Player: Player who committed the infraction
 - Detail 1: Infraction Type (e.g. Slashing, Tripping, Roughing, Hooking, ...)
 - Detail 2: length of penalty
+
+
