@@ -1,7 +1,7 @@
 ## About
 This code is designed to pull NCAA women'S hockey pbp data (DI, DII or DIII) from stats.ncaa.org, put it
 in a format as close to Stathlete's Big Data Cup format as possible, and save it as a csv in the format
-"GameYear-GameMonth-GameDay_eventid.csv". See the end of this doc for the full data format.
+"GameYear-GameMonth-GameDay_eventid.csv". Designed for educational/academic research use only. See the end of this doc for the full data format.
 
 Thanks to Dave MacPherson for setting up the scraping portion of this and Gilles Dignard for providing independently scraped pbp which was heavily used as a reference for parsing and testing.
 
